@@ -1,5 +1,7 @@
 # Copyright (c) 2015, Frappe Technologies Pvt. Ltd. and Contributors
 # License: MIT. See LICENSE
+from unittest.mock import patch
+
 import frappe
 from frappe.core.doctype.user_permission.test_user_permission import create_user
 from frappe.defaults import *
@@ -103,3 +105,17 @@ class TestDefaults(IntegrationTestCase):
 			perm_doc.save(ignore_permissions=True)
 			set_user_default("country", "United States")
 			self.assertEqual(get_user_default("Country"), "United States")
+
+	def test_set_default_to_none_clears_cache_only_when_a_value_existed(self):
+		key = "_test_unset_default"
+		frappe.db.delete("DefaultValue", {"defkey": key, "parent": "__default"})
+
+		with patch("frappe.clear_cache") as clear_cache:
+			set_default(key, None, "__default")
+		clear_cache.assert_not_called()
+
+		set_default(key, "value", "__default")
+		with patch("frappe.clear_cache") as clear_cache:
+			set_default(key, None, "__default")
+		clear_cache.assert_called()
+		self.assertFalse(frappe.db.exists("DefaultValue", {"defkey": key, "parent": "__default"}))
