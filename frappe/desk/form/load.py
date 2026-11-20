@@ -254,7 +254,11 @@ def get_permlevel_restricted_fieldnames(dt) -> set:
 	restricted = restricted_fieldnames(meta, readable_permlevels(meta))
 	for table_field in meta.get_table_fields(include_computed=True):
 		child_meta = frappe.get_meta(table_field.options)
-		restricted |= restricted_fieldnames(child_meta, readable_permlevels(child_meta, parenttype=dt))
+		if table_field.fieldname in restricted:
+			# a restricted table field hides its whole table, whatever its fields' own permlevels
+			restricted |= {df.fieldname for df in child_meta.fields or []}
+		else:
+			restricted |= restricted_fieldnames(child_meta, readable_permlevels(child_meta, parenttype=dt))
 
 	return restricted
 

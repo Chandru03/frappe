@@ -294,6 +294,69 @@ class TestFormLoad(IntegrationTestCase):
 			contact.delete()
 			frappe.delete_doc(contact_phone_property_setter.doctype, contact_phone_property_setter.name)
 
+	def test_attachments_hidden_when_their_table_field_is_permlevel_restricted(self):
+		from frappe.desk.form.load import get_attachments
+
+		contact = frappe.new_doc("Contact")
+		contact.first_name = "_Test Contact 2"
+		contact.append("phone_nos", {"phone": "123456"})
+		contact.insert()
+
+		# the child field keeps permlevel 0; the table field holding it is restricted instead
+		phone_nos_property_setter = make_property_setter("Contact", "phone_nos", "permlevel", 1, "Int")
+		reset("Contact")
+
+		unrestricted_file = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "visible.png",
+				"content": b"visible-bytes",
+				"attached_to_doctype": contact.doctype,
+				"attached_to_name": contact.name,
+				"attached_to_field": "first_name",
+			}
+		).insert()
+		restricted_file = frappe.get_doc(
+			{
+				"doctype": "File",
+				"file_name": "hidden.png",
+				"content": b"hidden-bytes",
+				"attached_to_doctype": contact.doctype,
+				"attached_to_name": contact.name,
+				"attached_to_field": "phone",
+			}
+		).insert()
+
+		user = frappe.get_doc("User", "test@example.com")
+		user_roles = frappe.get_roles()
+		user.remove_roles(*user_roles)
+		user.add_roles("Accounts User")
+
+		try:
+			frappe.set_user(user.name)
+			names = {f.file_name for f in get_attachments(contact.doctype, contact.name)}
+			self.assertIn("visible.png", names)
+			self.assertNotIn("hidden.png", names)
+
+			# the timeline's "attached a file" entries follow the same rule
+			get_docinfo(contact)
+			logs = " ".join(c.content for c in frappe.response["docinfo"].attachment_logs)
+			self.assertIn("visible.png", logs)
+			self.assertNotIn("hidden.png", logs)
+
+			# Administrator always bypasses permlevel restrictions
+			frappe.set_user("Administrator")
+			names = {f.file_name for f in get_attachments(contact.doctype, contact.name)}
+			self.assertEqual(names, {"visible.png", "hidden.png"})
+		finally:
+			frappe.set_user("Administrator")
+			user.remove_roles("Accounts User")
+			user.add_roles(*user_roles)
+			unrestricted_file.delete()
+			restricted_file.delete()
+			contact.delete()
+			frappe.delete_doc(phone_nos_property_setter.doctype, phone_nos_property_setter.name)
+
 	def test_get_doc_info(self):
 		note = frappe.new_doc("Note")
 		note.content = "some content"
