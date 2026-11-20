@@ -366,7 +366,7 @@ class LDAPSettings(Document):
 					if logout_sessions and (user_id := get_user_by_email(user)):
 						from frappe.sessions import clear_sessions
 
-						clear_sessions(user=user_id, force=True)
+						clear_sessions(user=user_id, keep_current=True, force=True)
 					frappe.msgprint(_("Password changed successfully."))
 				else:
 					frappe.throw(_("Failed to change password."))

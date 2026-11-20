@@ -592,6 +592,23 @@ class LDAP_TestCase:
 			connect_to_ldap.assert_called_with(self.base_dn, self.base_password, read_only=False)
 
 	@mock_ldap_connection
+	def test_reset_password_keeps_current_session(self):
+		user = "posix.user1@unit.testing"
+		if not frappe.db.exists("User", user):
+			frappe.get_doc({"doctype": "User", "email": user, "first_name": "posix"}).insert(
+				ignore_permissions=True
+			)
+
+		with (
+			mock.patch.object(self.connection, "modify", return_value=True),
+			mock.patch("frappe.sessions.clear_sessions") as clear_sessions,
+		):
+			self.test_class.reset_password(user, "posix_user_password", logout_sessions=1)
+
+		# the user resetting their own password stays logged in, as with a non-LDAP password reset
+		clear_sessions.assert_called_once_with(user=user, keep_current=True, force=True)
+
+	@mock_ldap_connection
 	def test_convert_ldap_entry_to_dict(self):
 		self.connection.search(
 			search_base=self.ldap_user_path,
